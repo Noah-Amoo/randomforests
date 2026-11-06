@@ -1,4 +1,5 @@
 backend/.venv/
+backend/models/*.joblib
 __pycache__/
 *.py[cod]
 .env
