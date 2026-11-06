@@ -3,8 +3,8 @@
 A simple educational project using React + TypeScript, Flask, and a
 scikit-learn Random Forest. Card 1 provides the frontend shell and backend
 health endpoint. Card 2 adds reproducible synthetic data generation.
-Card 3 trains, evaluates, and saves the Random Forest. The prediction API
-and form are not implemented yet.
+Card 3 trains, evaluates, and saves the Random Forest. Card 4 adds the
+prediction API. The prediction form is not implemented yet.
 
 **Educational demo only. Not for lending decisions.** This project uses
 synthetic data; metrics on that data will not establish real-world accuracy.
@@ -29,6 +29,10 @@ The explicit Python executable avoids requiring virtual environment activation.
 The virtual environment and frontend dependencies are excluded from version control.
 
 ## Run locally
+
+Generate the data and train the model (commands below) before starting
+Flask for the first time. Flask fails at startup if the model is missing
+or incompatible; it does not train a model automatically.
 
 In one terminal, from the project root:
 
@@ -58,8 +62,8 @@ Invoke-RestMethod http://localhost:5000/health
 {"status": "ok"}
 ```
 
-CORS currently permits the local frontend origin `http://localhost:5173`
-for this endpoint only.
+CORS permits the local frontend origin `http://localhost:5173`
+for `/health` and `/predict`.
 
 ## Generate synthetic data (Card 2)
 
@@ -143,9 +147,53 @@ upgrading scikit-learn.
 Metrics describe this synthetic dataset only, not real lending performance.
 The estimated probabilities are not calibrated financial risk scores.
 
+## Prediction API (Card 4)
+
+The saved model is loaded once when the Flask application starts. Restart
+Flask after retraining to use the new artifact.
+
+`POST /predict` accepts a JSON object containing exactly the five features.
+Numeric strings, booleans, nulls, missing/extra fields, non-finite numbers,
+and values outside the inclusive generated ranges in the table above are
+rejected. Credit score and years employed must be whole numbers. These
+ranges deliberately limit this demo to the synthetic training domain.
+
+With Flask running, use PowerShell:
+
+```powershell
+$body = @{
+    annual_income = 60000
+    loan_amount = 15000
+    credit_score = 700
+    monthly_debt_payments = 500
+    years_employed = 5
+} | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:5000/predict -Method Post `
+    -ContentType "application/json" -Body $body
+```
+
+Successful requests return HTTP 200 with this shape (values illustrative):
+
+```json
+{
+  "predicted_default": false,
+  "default_probability": 0.28
+}
+```
+
+`predicted_default` is the classifier's prediction (`true` means default);
+`default_probability` is its estimated probability for class `1`, between
+0 and 1. Inputs are ordered using the saved feature names, not JSON key order.
+Invalid requests return HTTP 400 with `{"error": "Explanation of the problem"}`.
+Malformed JSON and non-JSON content types also return this error shape.
+Validation failures are logged without logging the customer input values.
+
+Only use trusted, locally trained artifacts. This API has no authentication
+and is intended for local educational use, not real lending decisions.
+
 ## Validate
 
-Backend, from the project root:
+Backend, from the project root (generate data and train first):
 
 ```powershell
 Set-Location backend
@@ -163,10 +211,10 @@ npm run lint
 ## Layout
 
 - `frontend/`: Vite React TypeScript app
-- `backend/app.py`: Flask application and health route
+- `backend/app.py`: Flask application, startup model loading, health and prediction routes
 - `backend/requirements.txt`: API and machine learning dependencies
 - `backend/generate_data.py`: fixed-seed synthetic dataset generator
 - `backend/data/synthetic_loans.csv`: generated educational dataset
 - `backend/train_model.py`: training, held-out evaluation, and model export
 - `backend/models/random_forest.joblib`: generated model and feature order
-- `backend/tests/`: health, data generation, and training tests
+- `backend/tests/`: health, data generation, training, and prediction API tests
